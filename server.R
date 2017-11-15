@@ -452,7 +452,7 @@ server <- function(input, output, session) {
     #Economic_Resource_Fixed_Income entry
     temp_Derivative_Instrument_Dynamic <-
       dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
-    temp_db_Economic_Resource_Fixed_Income <-
+    temp_db_Economic_Resource_Fixed_IncomeCO <-
       cbind.data.frame(
         tail(
           temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
@@ -462,7 +462,7 @@ server <- function(input, output, session) {
         as.numeric(finL),
         aol
       )
-    names(temp_db_Economic_Resource_Fixed_Income) <-
+    names(temp_db_Economic_Resource_Fixed_IncomeCO) <-
       c(
         "Derivative_Instrument_Dynamic_ID",
         "timestamp",
@@ -472,7 +472,7 @@ server <- function(input, output, session) {
     dbWriteTable(
       sqlite,
       "Economic_Resource_Fixed_Income",
-      temp_db_Economic_Resource_Fixed_Income,
+      temp_db_Economic_Resource_Fixed_IncomeCO,
       append = TRUE
     )
     
