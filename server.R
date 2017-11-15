@@ -352,18 +352,134 @@ server <- function(input, output, session) {
   observeEvent(input$button_PlanCO, {
     
     #lesen aus Datenbank
-    #Berechnung
-    P <-input$ti_Do_Stock_PriceCO
-    X <-input$ti_Exercise_Or_Forward_PriceCO
-    r <-input$ti_Interest_RateCO
-    
-    dtse <- as.numeric(difftime(input$ti_Expiration_DateCO,input$ti_Contracting_DateCO, units ="days"))
-    dtss <- as.numeric(difftime(input$ti_Do_timestampCO,input$ti_Contracting_DateCO, units = "days"))
-    tM <- round(1 -dtss/dtse, digits = 2)
+   spd <- dbReadTable(sqlite, "Stock_Pricing_Dynamic")
+   sps <- dbReadTable(sqlite, "Stock_Derivative_Static")
    
+   
+    #Zuweisen der Felder
+    P <-as.numeric(spd$Stock_Pricing_Dynamic_ID[1])
+    X <-as.numeric(sps$Exercise_Or_Forward_Price[1])
+    r <-as.numeric(sps$Interest_Rate[1])
+    sigma <-as.numeric(sps$Stock_Volatility[1])
+    c_start<-as.Date(sps$Contracting_Date[1])
+    c_end <- as.Date(sps$Expiration_Date[1])
+    c_timestamp <- as.Date(spd$timestamp[1])
     
+    #Typ Convertierung
+
     
-    output$to_PlanCO <- renderText("N(d1) =")
+    #Calculate Time to maturity
+    dtse <- as.numeric(difftime(c_end,c_start, units ="days"))
+    dtss <- as.numeric(difftime(c_timestamp,c_start, units = "days"))
+    tm <- round(1 -dtss/dtse, digits = 2)
+  
+   
+    #Berechnung d1
+    r<- r/100 #Angabe in Prozent
+    sigma <- sigma/100 # Angabe in Prozent
+    if((tm != 0) & 
+       (sigma != 0)){
+      d1<-(log(P/X)+((r+sigma^2/2)*tm))/(sigma*sqrt(tm))
+      d2<-d1-sigma*sqrt(tm)
+      Nd1 <- pnorm(d1)
+      Nd2<- pnorm(d2)
+    }else{
+      d1 <- 0
+      d2 <- 0
+      Nd1 <- 1
+      Nd2<- 1
+    }
+    finA<-P*Nd1
+    finL<- ((-X*Nd2)*exp(-r*tm))
+    fV <- finA+finL
+    if(finA > (finL*-1))
+    {
+      aol <-1
+    }
+    else{
+      aol <-2
+    }
+    
+    #Write to Database
+    
+    #Derivative_Instrument_Dynamic entry
+    temp_Stock_Derivative_Static <-
+      dbReadTable(sqlite, "Stock_Derivative_Static")
+    temp_db_Derivative_Instrument_DynamicCO<-cbind.data.frame(
+        tail(temp_Stock_Derivative_Static$Stock_Derivative_Static_ID, 1),
+      c_timestamp,
+      fV
+    )
+    names(temp_db_Derivative_Instrument_DynamicCO) <-
+      c("Stock_Derivative_Static_ID",
+        "timestamp",
+        "Fair_Value")
+    dbWriteTable(
+      sqlite,
+      "Derivative_Instrument_Dynamic",
+      temp_db_Derivative_Instrument_DynamicCO,
+      append = TRUE
+    )
+    #Economic_Resource_Fixed_Income entry
+    temp_Derivative_Instrument_Dynamic <-
+    dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    temp_db_Economic_Resource_Risky_IncomeCO<-
+      cbind.data.frame(
+        tail(
+          temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+          1
+        ),
+        as.character(input$ti_Do_timestamp),
+        as.numeric(Nd1),
+        as.numeric(finA),
+        aol
+  
+      )
+    names(temp_db_Economic_Resource_Risky_IncomeCO) <-
+      c(
+        "Derivative_Instrument_Dynamic_ID",
+        "timestamp",
+        "Nd1t",
+        "Value",
+        "Asset_Or_Liability"
+      )
+    dbWriteTable(
+      sqlite,
+      "Economic_Resource_Risky_Income",
+      temp_db_Economic_Resource_Risky_IncomeCO,
+      append = TRUE
+    )
+    #Economic_Resource_Fixed_Income entry
+    temp_Derivative_Instrument_Dynamic <-
+      dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    temp_db_Economic_Resource_Fixed_Income <-
+      cbind.data.frame(
+        tail(
+          temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+          1
+        ),
+        as.character(input$ti_Do_timestamp),
+        as.numeric(finL),
+        aol
+      )
+    names(temp_db_Economic_Resource_Fixed_Income) <-
+      c(
+        "Derivative_Instrument_Dynamic_ID",
+        "timestamp",
+        "Present_Value",
+        "Asset_Or_Liability"
+      )
+    dbWriteTable(
+      sqlite,
+      "Economic_Resource_Fixed_Income",
+      temp_db_Economic_Resource_Fixed_Income,
+      append = TRUE
+    )
+    
+    # Output
+    
+    outText <- sprintf("N(d1) = %f Riski Income = %f Fixed Income = %f",round(Nd1,digits=2),round(finA,digits=2), round(finL, digits=2))
+    output$to_PlanCO <- renderText(outText)
     js$collapse("box_CheckCO")
   })
   
