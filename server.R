@@ -412,7 +412,7 @@ server <- function(input, output, session) {
       dbReadTable(sqlite, "Stock_Derivative_Static")
     temp_db_Derivative_Instrument_DynamicCO<-cbind.data.frame(
         tail(temp_Stock_Derivative_Static$Stock_Derivative_Static_ID, 1),
-      c_timestamp,
+        as.character(c_timestamp),
       fV
     )
     names(temp_db_Derivative_Instrument_DynamicCO) <-
