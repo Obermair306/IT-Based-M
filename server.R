@@ -496,7 +496,7 @@ server <- function(input, output, session) {
     
     ## TODO Check Action ##
     
-    output$to_CheckCO <- renderText("Delta N(d1) = 0")
+    output$to_CheckCO <- renderText("Delta N(d1) t = 0")
     js$collapse("box_ActCO")
   })
   
@@ -508,7 +508,7 @@ server <- function(input, output, session) {
     
     ## TODO Act Action ##
     
-    output$to_ActCO <- renderText("Forward: No action possible")
+    output$to_ActCO <- renderText("Forward: No action possiblet")
     v$doCalcAndPlot <- input$button_ActCO #CalcAndPlot
   })
   
