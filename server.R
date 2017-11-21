@@ -295,6 +295,8 @@ server <- function(input, output, session) {
     })
   })
   
+  # START 
+  
   observeEvent(input$ab_Initial_PricingCO, {
     js$collapse("box_DoCO")
     hide(id = "box_Initial_PricingCO", anim = FALSE)
@@ -349,6 +351,9 @@ server <- function(input, output, session) {
     
     js$collapse("box_PlanCO")
   })
+  
+  ## Button - PlanCO - Start
+  
   observeEvent(input$button_PlanCO, {
     
     #lesen aus Datenbank
@@ -475,13 +480,39 @@ server <- function(input, output, session) {
       temp_db_Economic_Resource_Fixed_IncomeCO,
       append = TRUE
     )
-    
+  
     # Output
     
     outText <- sprintf("N(d1) = %f Riski Income = %f Fixed Income = %f",round(Nd1,digits=2),round(finA,digits=2), round(finL, digits=2))
     output$to_PlanCO <- renderText(outText)
     js$collapse("box_CheckCO")
   })
+  
+  ## Button - PlanCO - End
+  
+  ## Button - CheckCO - Start
+  
+  observeEvent(input$button_CheckCO, {
+    
+    ## TODO Check Action ##
+    
+    output$to_CheckCO <- renderText("Delta N(d1) t = 0")
+    js$collapse("box_ActCO")
+  })
+  
+  ## Button - CheckCO - End
+  
+  ## Button - ActCO - Start
+  
+  observeEvent(input$button_ActCO, {
+    
+    ## TODO Act Action ##
+    
+    output$to_ActCO <- renderText("Forward: No action possiblet")
+    v$doCalcAndPlot <- input$button_ActCO #CalcAndPlot
+  })
+  
+  ## Button - ActCO - End
   
   observeEvent(
     input$load_table_Stock_Pricing_Dynamic,
