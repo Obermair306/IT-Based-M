@@ -367,8 +367,8 @@ server <- function(input, output, session) {
    
    
     #Zuweisen der Felder
-    #TODO - Fehler wg P <- Stock_Pricing_Dynamic_ID[1]
-    P <-as.numeric(spd$Stock_Pricing_Dynamic_ID[1])
+    #P = Preis -> Stock_Price notwendig, war Stock_Pricing_Dynamic_ID
+    P <-as.numeric(spd$Stock_Price[1])
     X <-as.numeric(sps$Exercise_Or_Forward_Price[1])
     r <-as.numeric(sps$Interest_Rate[1])
     sigma <-as.numeric(sps$Stock_Volatility[1])
