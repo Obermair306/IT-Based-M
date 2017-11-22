@@ -18,13 +18,14 @@ $('#' + boxid).closest('.box').find('[data-widget=collapse]').click();
 
 sqlite <- dbConnect(SQLite(), "db.sqlite")
 
+global_nd1 <-0
+global_liablity_new  <-0
+global_asset_new  <-0
+global_liablity_b_t  <-0
 
 server <- function(input, output, session) {
   
-  global_nd1 <- 0
-  global_liablity_new <- 0
-  global_asset_new <- 0
-  global_liablity_b_t <-0
+ 
   
   observeEvent(input$ab_Initial_Pricing, {
     js$collapse("box_Do")
@@ -365,7 +366,7 @@ server <- function(input, output, session) {
     
     Nd1 <- pnorm(d1)
     Nd2 <- pnorm(d2)
-    global_nd1 <- Nd1
+    global_nd1 <<- Nd1
     
     finA <- P*Nd1
     finL <- ((-X*Nd2)*exp(-r*1))
@@ -548,7 +549,7 @@ server <- function(input, output, session) {
     c_timestamp <- as.Date(tail(spd$timestamp,1))
   
     liability <- as.numeric(tail(erfi$Present_Value,1)) 
-    time_b_t <- as.Date(did$timestamp[1])
+    time_b_t <- as.Date(tail(did$timestamp,1))
     nd1t_before <- as.numeric(erri$Nd1t)
     
     #Calculate Time to maturitys
@@ -571,12 +572,12 @@ server <- function(input, output, session) {
       d1<-(log(P/X)+((r+sigma^2/2)*tm))/(sigma*sqrt(tm))
       #d2<-d1-sigma*sqrt(tm)
       Nd1 <- pnorm(d1)
-      global_nd1 <- Nd1
+      global_nd1 <<- Nd1
       #Nd2<- pnorm(d2)
       #recalc N(d2,t) from previous liability 
       Nd2_before <- liability/(X * exp(-1 * r * tm_b_t))
       liability_b_t <- X * Nd2_before * exp(-1 * r * tm)
-      global_liablity_b_t <- liability_b_t 
+      global_liablity_b_t <<- liability_b_t 
       
     }else{
       d1 <- 0
@@ -694,7 +695,8 @@ server <- function(input, output, session) {
     #retrieve last element of N(d1,t-1)
     nd1_previous = as.numeric(tail(temp_check_risky_income$Nd1t, 1)) 
     #calculate Delta N(d1,t) - N(d1,t-1) 
-    deltaNd1 =  global_nd1 - nd1_previous 
+    global_nd1_test <- global_nd1
+    deltaNd1 <-  global_nd1 - nd1_previous 
       
     
     #read from DB / price
@@ -703,12 +705,12 @@ server <- function(input, output, session) {
     fixed_income <- dbReadTable(sqlite, "Economic_Resource_Fixed_Income")
     
     #extract var
-    price     <-as.numeric(spd$Stock_Price[1])
+    price <-as.numeric(tail(spd$Stock_Price,1))
     
     #propose rebalancing of asset and liability
-    global_asset_new    =  price * global_nd1
-    global_liablity_new =  global_liablity_new - ( price * deltaNd1 )
-    
+    global_asset_new    <<-  price * global_nd1
+    global_liablity_new <<- global_liablity_b_t - ( price * deltaNd1 )
+  
     #output
     output$to_CheckCO <- renderText(paste("Delta N(d1) t = ",deltaNd1, sep = "")) 
     js$collapse("box_ActCO")
@@ -728,10 +730,10 @@ server <- function(input, output, session) {
     #   - set value for asset/liab/off_balance
     
     #aol =0 -> off_balance, aol = 1 -> asset, aol = 2 -> liability
-    aol = 0
+    aol <- 0
     
     #calculate new porfolio fair value
-    fV = global_asset_new + global_liablity_new
+    fV <- global_asset_new + global_liablity_new
      
     #check asset or liability
     if(fV > 0)
@@ -752,7 +754,7 @@ server <- function(input, output, session) {
     
     temp_db_Derivative_Instrument_DynamicCO2<-cbind.data.frame(
       tail(temp_Stock_Derivative_Static$Stock_Derivative_Static_ID, 1),
-      spd$timestamp[1],
+      tail(spd$timestamp,1),
       fV
     )
     names(temp_db_Derivative_Instrument_DynamicCO2) <-
@@ -776,7 +778,7 @@ server <- function(input, output, session) {
           temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
           1
         ),
-        spd$timestamp[1],
+        tail(spd$timestamp,1),
         as.numeric(global_nd1),
         as.numeric(global_asset_new),
         aol
@@ -807,7 +809,7 @@ server <- function(input, output, session) {
           temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
           1
         ),
-        spd$timestamp[1],
+        tail(spd$timestamp,1),
         as.numeric(global_liablity_new),
         aol
       )
@@ -839,7 +841,7 @@ server <- function(input, output, session) {
             temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
             1
           ),
-          spd$timestamp[1],
+          tail(spd$timestamp,1),
           fV
         )
       
@@ -875,7 +877,7 @@ server <- function(input, output, session) {
             temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
             1
           ),
-          spd$timestamp[1]
+          tail(spd$timestamp,1)
         )
       
       names(temp_db_Balance_Off) <-
