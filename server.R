@@ -18,7 +18,12 @@ $('#' + boxid).closest('.box').find('[data-widget=collapse]').click();
 
 sqlite <- dbConnect(SQLite(), "db.sqlite")
 
+
 server <- function(input, output, session) {
+  
+  global_nd1 <- 0
+  global_liablity_new <- 0
+  global_asset_new <- 0
   
   observeEvent(input$ab_Initial_Pricing, {
     js$collapse("box_Do")
@@ -362,6 +367,7 @@ server <- function(input, output, session) {
    
    
     #Zuweisen der Felder
+    #TODO Fehler wg P <- Stock_Pricing_Dynamic_ID[1]
     P <-as.numeric(spd$Stock_Pricing_Dynamic_ID[1])
     X <-as.numeric(sps$Exercise_Or_Forward_Price[1])
     r <-as.numeric(sps$Interest_Rate[1])
@@ -387,6 +393,7 @@ server <- function(input, output, session) {
       d1<-(log(P/X)+((r+sigma^2/2)*tm))/(sigma*sqrt(tm))
       d2<-d1-sigma*sqrt(tm)
       Nd1 <- pnorm(d1)
+      global_nd1 <- Nd1
       Nd2<- pnorm(d2)
     }else{
       d1 <- 0
@@ -491,12 +498,38 @@ server <- function(input, output, session) {
   ## Button - PlanCO - End
   
   ## Button - CheckCO - Start
-  
+  #retrieve N(d,t-1) from DB and compare to N(d,t)
+  #propose rebalance of asset and liability
+  #hand over asset, liability
   observeEvent(input$button_CheckCO, {
     
-    ## TODO Check Action ##
+    #read from DB_Risky_Income
+    temp_check_risky_income <- dbReadTable(sqlite, "Economic_Resource_Risky_Income")
+  
+    #TODO - at the moment just 1 value available bec. of Init - change? take 1x global & 1x from DB
+    #TODO - save N(d1,t) at Init -> global and comppare it to new N(d1,t+1) and save it 
     
-    output$to_CheckCO <- renderText("Delta N(d1) t = 0")
+    #retrieve last element of N(d1,t-1)
+    nd1_previous = as.numeric(tail(temp_check_risky_income$Nd1t, 1)) 
+    #calculate Delta N(d1,t-1) - N(d1,t)
+    deltaNd1 = nd1_previous - global_nd1
+      
+    
+    #read from DB / price
+    spd <- dbReadTable(sqlite, "Stock_Pricing_Dynamic")
+    #read from DB / liability
+    fixed_income <- dbReadTable(sqlite, "Economic_Resource_Fixed_Income")
+    
+    #extract var
+    price     <-as.numeric(spd$Stock_Price[1])
+    liability <- as.numeric(fixed_income$Present_Value)
+    
+    #propose rebalancing of asset and liability
+    global_asset_new    =  price * global_nd1
+    global_liablity_new =  liability + ( -1 * price * deltaNd1)
+    
+    #output
+    output$to_CheckCO <- renderText(paste("Delta N(d1) t = ",deltaNd1, sep = "")) 
     js$collapse("box_ActCO")
   })
   
