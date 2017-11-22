@@ -731,18 +731,18 @@ server <- function(input, output, session) {
   
   ## Button - ActCO - End
   
-  #TODO - add Continue Event -> clear for next round
+  #add Continue Event -> clear for next round
   
-  #observeEvent(input$button_Act_ContinueCO, {
-   # js$collapse("box_ActCO")
-    #js$collapse("box_PlanCO")
-    #js$collapse("box_CheckCO")
+  observeEvent(input$button_Act_ContinueCO, {
+   js$collapse("box_ActCO")
+   js$collapse("box_PlanCO")
+   js$collapse("box_CheckCO")
     
-  #  output$to_PlanCO <- renderText("")
-  #  output$to_CheckCO <- renderText("")
-  #  output$to_ActCO <- renderText("")
+   output$to_PlanCO <- renderText("")
+   output$to_CheckCO <- renderText("")
+   output$to_ActCO <- renderText("")
     
-  #})
+})
   
   
   observeEvent(
