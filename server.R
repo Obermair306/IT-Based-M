@@ -24,6 +24,7 @@ server <- function(input, output, session) {
   global_nd1 <- 0
   global_liablity_new <- 0
   global_asset_new <- 0
+  global_liablity_b_t <-0
   
   observeEvent(input$ab_Initial_Pricing, {
     js$collapse("box_Do")
@@ -528,9 +529,12 @@ server <- function(input, output, session) {
   observeEvent(input$button_PlanCO, {
     
     #lesen aus Datenbank
-   spd <- dbReadTable(sqlite, "Stock_Pricing_Dynamic")
-   sps <- dbReadTable(sqlite, "Stock_Derivative_Static")
-   
+   spd  <- dbReadTable(sqlite, "Stock_Pricing_Dynamic")
+   sps  <- dbReadTable(sqlite, "Stock_Derivative_Static")
+   erfi <- dbReadTable(sqlite, "Economic_Resource_Fixed_Income")
+   erri  <- dbReadTable(sqlite, "Economic_Resource_Risky_Income")
+   did  <- dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+
    
     #Zuweisen der Felder
     #P = Preis -> Stock_Price notwendig, war Stock_Pricing_Dynamic_ID
@@ -541,122 +545,133 @@ server <- function(input, output, session) {
     c_start<-as.Date(sps$Contracting_Date[1])
     c_end <- as.Date(sps$Expiration_Date[1])
     c_timestamp <- as.Date(spd$timestamp[1])
+  
+    liability <- as.numeric(erfi$Present_Value[1]) 
+    time_b_t <- as.Date(did$timestamp[1])
+    nd1t_before <- as.numeric(erri$Nd1t)
     
-    #Typ Convertierung
-
-    
-    #Calculate Time to maturity
+    #Calculate Time to maturitys
     dtse <- as.numeric(difftime(c_end,c_start, units ="days"))
     dtss <- as.numeric(difftime(c_timestamp,c_start, units = "days"))
     tm <- round(1 -dtss/dtse, digits = 2)
   
+    #Calculate Time to maturity
+    dtse_b_t <- as.numeric(difftime(c_end,c_start, units ="days"))
+    dtss_b_t <- as.numeric(difftime(time_b_t,c_start, units = "days"))
+    tm_b_t   <- round(1 - dtss_b_t/dtse_b_t, digits = 2)
+    
    
     #Berechnung d1
     r<- r/100 #Angabe in Prozent
+    liability_b_t <-0
     sigma <- sigma/100 # Angabe in Prozent
     if((tm != 0) & 
        (sigma != 0)){
       d1<-(log(P/X)+((r+sigma^2/2)*tm))/(sigma*sqrt(tm))
-      d2<-d1-sigma*sqrt(tm)
+      #d2<-d1-sigma*sqrt(tm)
       Nd1 <- pnorm(d1)
       global_nd1 <- Nd1
-      Nd2<- pnorm(d2)
+      #Nd2<- pnorm(d2)
+      #recalc N(d2,t) from previous liability 
+      Nd2_before <- liability/(X * exp(-1 * r/100 * tm_b_t))
+      liability_b_t <- X * Nd2_before * exp(-1 * r/100 * tm)
+      global_liablity_b_t <- liability_b_t 
+      
     }else{
       d1 <- 0
       d2 <- 0
       Nd1 <- 1
       Nd2<- 1
     }
-    finA<-P*Nd1
-    finL<- ((-X*Nd2)*exp(-r*tm))
-    fV <- finA+finL
-    if(finA > (finL*-1))
-    {
-      aol <-1
-    }
-    else{
-      aol <-2
-    }
+    #finA<-P*Nd1
+    #finL<- ((-X*Nd2)*exp(-r*tm))
+    #fV <- finA+finL
+    #if(finA > (finL*-1))
+    #{
+    #  aol <-1
+    #}
+    #else{
+     # aol <-2
+    #}
     
     #Write to Database
     
     #Derivative_Instrument_Dynamic entry
-    temp_Stock_Derivative_Static <-
-      dbReadTable(sqlite, "Stock_Derivative_Static")
-    temp_db_Derivative_Instrument_DynamicCO<-cbind.data.frame(
-        tail(temp_Stock_Derivative_Static$Stock_Derivative_Static_ID, 1),
-        as.character(c_timestamp),
-      fV
-    )
-    names(temp_db_Derivative_Instrument_DynamicCO) <-
-      c("Stock_Derivative_Static_ID",
-        "timestamp",
-        "Fair_Value")
-    dbWriteTable(
-      sqlite,
-      "Derivative_Instrument_Dynamic",
-      temp_db_Derivative_Instrument_DynamicCO,
-      append = TRUE
-    )
+    #temp_Stock_Derivative_Static <-
+    #  dbReadTable(sqlite, "Stock_Derivative_Static")
+    #temp_db_Derivative_Instrument_DynamicCO<-cbind.data.frame(
+    #    tail(temp_Stock_Derivative_Static$Stock_Derivative_Static_ID, 1),
+    #    as.character(c_timestamp),
+    #  fV
+    #)
+    #names(temp_db_Derivative_Instrument_DynamicCO) <-
+    #  c("Stock_Derivative_Static_ID",
+    #    "timestamp",
+    #    "Fair_Value")
+    #dbWriteTable(
+    #  sqlite,
+    #  "Derivative_Instrument_Dynamic",
+    #  temp_db_Derivative_Instrument_DynamicCO,
+    #  append = TRUE
+    #)
     #Economic_Resource_Fixed_Income entry
-    temp_Derivative_Instrument_Dynamic <-
-    dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
-    temp_db_Economic_Resource_Risky_IncomeCO<-
-      cbind.data.frame(
-        tail(
-          temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
-          1
-        ),
-        as.character(input$ti_Do_timestamp),
-        as.numeric(Nd1),
-        as.numeric(finA),
-        aol
-  
-      )
-    names(temp_db_Economic_Resource_Risky_IncomeCO) <-
-      c(
-        "Derivative_Instrument_Dynamic_ID",
-        "timestamp",
-        "Nd1t",
-        "Value",
-        "Asset_Or_Liability"
-      )
-    dbWriteTable(
-      sqlite,
-      "Economic_Resource_Risky_Income",
-      temp_db_Economic_Resource_Risky_IncomeCO,
-      append = TRUE
-    )
-    #Economic_Resource_Fixed_Income entry
-    temp_Derivative_Instrument_Dynamic <-
-      dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
-    temp_db_Economic_Resource_Fixed_IncomeCO <-
-      cbind.data.frame(
-        tail(
-          temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
-          1
-        ),
-        as.character(input$ti_Do_timestamp),
-        as.numeric(finL),
-        aol
-      )
-    names(temp_db_Economic_Resource_Fixed_IncomeCO) <-
-      c(
-        "Derivative_Instrument_Dynamic_ID",
-        "timestamp",
-        "Present_Value",
-        "Asset_Or_Liability"
-      )
-    dbWriteTable(
-      sqlite,
-      "Economic_Resource_Fixed_Income",
-      temp_db_Economic_Resource_Fixed_IncomeCO,
-      append = TRUE
-    )
+    #temp_Derivative_Instrument_Dynamic <-
+    #dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    #temp_db_Economic_Resource_Risky_IncomeCO<-
+     # cbind.data.frame(
+      #  tail(
+       #   temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+        #  1
+        #),
+        #as.character(input$ti_Do_timestamp),
+        #as.numeric(Nd1),
+        #as.numeric(finA),
+        #aol
+      #)
+    
+    #names(temp_db_Economic_Resource_Risky_IncomeCO) <-
+     # c(
+      #  "Derivative_Instrument_Dynamic_ID",
+       # "timestamp",
+       #  "Nd1t",
+      #  "Value",
+      #  "Asset_Or_Liability"
+      #)
+    #dbWriteTable(
+    #  sqlite,
+    #  "Economic_Resource_Risky_Income",
+    #  temp_db_Economic_Resource_Risky_IncomeCO,
+    #  append = TRUE
+    #)
+    ##Economic_Resource_Fixed_Income entry
+    #temp_Derivative_Instrument_Dynamic <-
+    #  dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    #temp_db_Economic_Resource_Fixed_IncomeCO <-
+    #  cbind.data.frame(
+    #    tail(
+    #      temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+    #      1
+    #    ),
+    #    as.character(input$ti_Do_timestamp),
+    #    as.numeric(finL),
+    #    aol
+    #  )
+    #names(temp_db_Economic_Resource_Fixed_IncomeCO) <-
+    #  c(
+    #    "Derivative_Instrument_Dynamic_ID",
+    #    "timestamp",
+    #    "Present_Value",
+    #    "Asset_Or_Liability"
+    #  )
+    #dbWriteTable(
+    #  sqlite,
+    #  "Economic_Resource_Fixed_Income",
+    #  temp_db_Economic_Resource_Fixed_IncomeCO,
+    #  append = TRUE
+    #)
   
     # Output
-    
-    outText <- sprintf("N(d1) = %f Riski Income = %f Fixed Income = %f",round(Nd1,digits=2),round(finA,digits=2), round(finL, digits=2))
+    outText <- sprintf("N(d1) = %f Riski Income = %f Fixed Income = %f",round(Nd1,digits=2),round(nd1t_before*P,digits=2), round(liability_b_t, digits=2))
     output$to_PlanCO <- renderText(outText)
     js$collapse("box_CheckCO")
   })
