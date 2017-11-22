@@ -367,7 +367,7 @@ server <- function(input, output, session) {
    
    
     #Zuweisen der Felder
-    #TODO Fehler wg P <- Stock_Pricing_Dynamic_ID[1]
+    #TODO - Fehler wg P <- Stock_Pricing_Dynamic_ID[1]
     P <-as.numeric(spd$Stock_Pricing_Dynamic_ID[1])
     X <-as.numeric(sps$Exercise_Or_Forward_Price[1])
     r <-as.numeric(sps$Interest_Rate[1])
@@ -495,9 +495,9 @@ server <- function(input, output, session) {
     js$collapse("box_CheckCO")
   })
   
-  ## Button - PlanCO - End
   
   ## Button - CheckCO - Start
+  
   #retrieve N(d,t-1) from DB and compare to N(d,t)
   #propose rebalance of asset and liability
   #hand over asset, liability
@@ -533,19 +533,217 @@ server <- function(input, output, session) {
     js$collapse("box_ActCO")
   })
   
-  ## Button - CheckCO - End
   
   ## Button - ActCO - Start
   
   observeEvent(input$button_ActCO, {
     
     ## TODO Act Action ##
+    # 1 - perform rebalancing of protfolio - write to DB table fixed and risky
+    # 2 - Calculate portfolio fair value 
+    # 3 - store in DB tabel derivate_instr*_dynamic
+    #   - fv
+    #   - N(d1,t) in table risky
+    #   - set value for asset/liab/off_balance
     
-    output$to_ActCO <- renderText("Forward: No action possiblet")
+    #aol =0 -> off_balance, aol = 1 -> asset, aol = 2 -> liability
+    aol = 0 
+    #check asset or liability
+    if(global_asset_new > (global_liablity_new*-1))
+    {
+      aol <-1
+    }
+    else{
+      aol <-2
+    }
+    
+    #calculate new porfolio fair value
+    fV = global_asset_new + global_liablity_new
+      
+    #1 write asset and liability in DB table Economic_Resource_Fixed_Income
+    
+    #Derivative_Instrument_Dynamic entry
+    spd <- dbReadTable(sqlite, "Stock_Pricing_Dynamic")
+    
+    
+    #Derivative_Instrument_Dynamic entry
+    temp_Stock_Derivative_Static <- dbReadTable(sqlite, "Stock_Derivative_Static")
+    
+    temp_db_Derivative_Instrument_DynamicCO2<-cbind.data.frame(
+      tail(temp_Stock_Derivative_Static$Stock_Derivative_Static_ID, 1),
+      spd$timestamp[1],
+      fV
+    )
+    names(temp_db_Derivative_Instrument_DynamicCO2) <-
+      c("Stock_Derivative_Static_ID",
+        "timestamp",
+        "Fair_Value")
+    
+    dbWriteTable(
+      sqlite,
+      "Derivative_Instrument_Dynamic",
+      temp_db_Derivative_Instrument_DynamicCO2,
+      append = TRUE
+    )
+    
+    #Economic_Resource_Risky_Income entry
+    temp_Derivative_Instrument_Dynamic <- dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    
+    temp_db_Economic_Resource_Risky_IncomeCO<-
+      cbind.data.frame(
+        tail(
+          temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+          1
+        ),
+        tail(
+          temp_Derivative_Instrument_Dynamic$timestamp,
+          1
+        ),
+        as.numeric(global_nd1),
+        as.numeric(global_asset_new),
+        aol
+      )
+    
+    names(temp_db_Economic_Resource_Risky_IncomeCO) <-
+      c(
+        "Derivative_Instrument_Dynamic_ID",
+        "timestamp",
+        "Nd1t",
+        "Value",
+        "Asset_Or_Liability"
+      )
+    
+    dbWriteTable(
+      sqlite,
+      "Economic_Resource_Risky_Income",
+      temp_db_Economic_Resource_Risky_IncomeCO,
+      append = TRUE
+    )
+    
+    #Economic_Resource_Fixed_Income entry
+    temp_Derivative_Instrument_Dynamic <- dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    
+    temp_db_Economic_Resource_Fixed_IncomeCO <-
+      cbind.data.frame(
+        tail(
+          temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+          1
+        ),
+        tail(
+          temp_Derivative_Instrument_Dynamic$timestamp,
+          1
+        ),
+        as.numeric(global_liablity_new),
+        aol
+      )
+    names(temp_db_Economic_Resource_Fixed_IncomeCO) <-
+      c(
+        "Derivative_Instrument_Dynamic_ID",
+        "timestamp",
+        "Present_Value",
+        "Asset_Or_Liability"
+      )
+    
+    dbWriteTable(
+      sqlite,
+      "Economic_Resource_Fixed_Income",
+      temp_db_Economic_Resource_Fixed_IncomeCO,
+      append = TRUE
+    )
+    
+    #Write Table Asset aol > 0  / Liability aol < 0 or Off_Balance aol = 0
+    #TODO - check if aol can be 0
+    
+    temp_Derivative_Instrument_Dynamic <- dbReadTable(sqlite, "Derivative_Instrument_Dynamic")
+    
+    if (aol == !0){ #not off_balance
+      
+      temp_db_Asset_Liab <-
+        cbind.data.frame(
+          tail(
+            temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+            1
+          ),
+          tail(
+            temp_Derivative_Instrument_Dynamic$timestamp,
+            1
+          ),
+          fV
+        )
+      
+      names(temp_db_Asset_Liab) <-
+        c(
+          "Derivative_Instrument_Dynamic_ID",
+          "timestamp",
+          "Fair_Value"
+        )
+      
+      if(aoal > 0){ #write to asset
+        dbWriteTable(
+          sqlite,
+          "Asset",
+          temp_db_Asset_Liab,
+          append = TRUE
+        )
+      }
+      else{ #write to liability
+        dbWriteTable(
+          sqlite,
+          "Liability",
+          temp_db_Asset_Liab,
+          append = TRUE)
+      }
+      
+    }
+    else{ # off_balance aol = 0 
+      
+      temp_db_Balance_Off <-
+        cbind.data.frame(
+          tail(
+            temp_Derivative_Instrument_Dynamic$Derivative_Instrument_Dynamic_ID,
+            1
+          ),
+          tail(
+            temp_Derivative_Instrument_Dynamic$timestamp,
+            1
+          )
+        )
+      
+      names(temp_db_Balance_Off) <-
+        c(
+          "Derivative_Instrument_Dynamic_ID",
+          "timestamp"
+        )
+      
+      dbWriteTable(
+        sqlite,
+        "Off_Balance",
+        temp_db_Balance_Off,
+        append = TRUE)
+    }
+    
+      
+    output$to_ActCO <- renderText("Forward: No action possible")
+    
+    #TODO - fill diagram with values
     v$doCalcAndPlot <- input$button_ActCO #CalcAndPlot
   })
   
   ## Button - ActCO - End
+  
+  #TODO - add Continue Event -> clear for next round
+  
+  #observeEvent(input$button_Act_ContinueCO, {
+   # js$collapse("box_ActCO")
+    #js$collapse("box_PlanCO")
+    #js$collapse("box_CheckCO")
+    
+  #  output$to_PlanCO <- renderText("")
+  #  output$to_CheckCO <- renderText("")
+  #  output$to_ActCO <- renderText("")
+    
+  #})
+  
   
   observeEvent(
     input$load_table_Stock_Pricing_Dynamic,
