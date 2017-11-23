@@ -339,8 +339,6 @@ server <- function(input, output, session) {
                  temp_db_Stock_Derivative_StaticCO,
                  append = TRUE)
 
-    ## redesign
-    
     #lesen aus Datenbank
     sps <- dbReadTable(sqlite, "Stock_Derivative_Static")
   
@@ -634,6 +632,19 @@ server <- function(input, output, session) {
   
   observeEvent(input$button_ActCO, {
     
+    #lesen aus Datenbank
+    spd  <- dbReadTable(sqlite, "Stock_Pricing_Dynamic")
+    sps  <- dbReadTable(sqlite, "Stock_Derivative_Static")
+   
+    #Zuweisen der Felder
+    c_start<-as.Date(tail(sps$Contracting_Date,1))
+    c_end <- as.Date(tail(sps$Expiration_Date,1))
+    c_timestamp <- as.Date(tail(spd$timestamp,1))
+    
+    #Calculate Time to maturitys
+    dtse <- as.numeric(difftime(c_end,c_start, units ="days"))
+    dtss <- as.numeric(difftime(c_timestamp,c_start, units = "days"))
+    tm <- round(1 -dtss/dtse, digits = 2)
     
     #aol =0 -> off_balance, aol = 1 -> asset, aol = 2 -> liability
     aol <- 0
@@ -800,7 +811,16 @@ server <- function(input, output, session) {
         append = TRUE)
     }
     
-    output$to_ActCO <- renderText("Call: No action possible")
+    text_call_end      <- "Call-Option Finished - Fair Value = "
+    text_call_running  <- "Call-Option Running - Click Continue"
+    
+    if (tm == 0){
+      output$to_ActCO <- renderText(paste(text_call_end,fV))
+    }
+    else{
+      output$to_ActCO <- renderText(text_call_running)
+    }
+   
     
     #TODO - fill diagram with values
     v$doCalcAndPlot <- input$button_ActCO #CalcAndPlot
